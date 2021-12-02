@@ -19,7 +19,9 @@ repositories {
 
 dependencies {
     compile('org.apache.kafka:kafka-clients:2.4.0')
+    compile('redis.clients:jedis:3.6.1')
     implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation('org.springframework.boot:spring-boot-starter-data-redis')
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
