@@ -1,2 +1,3 @@
 rootProject.name = 'kafka-core-technology'
+include 'kafka-sort-consume'
 

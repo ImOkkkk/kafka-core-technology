@@ -1,20 +1,17 @@
-// 使用插件
 plugins {
     id 'java'
-    id 'org.springframework.boot' version '2.4.4'
-    id 'io.spring.dependency-management' version '1.0.11.RELEASE'
+    id 'org.springframework.boot'
+    id 'io.spring.dependency-management'
 }
 
 group 'org.imokkkk'
 version '1.0-SNAPSHOT'
 
 repositories {
-    // 阿里云镜像仓库
     maven {
         allowInsecureProtocol = true
         url 'https://maven.aliyun.com/repository/public/'
     }
-    mavenLocal()
     mavenCentral()
 }
 
@@ -22,12 +19,8 @@ dependencies {
     implementation 'org.projectlombok:lombok:1.18.22'
     implementation 'cn.hutool:hutool-all:5.7.19'
     implementation 'com.alibaba:fastjson:1.2.79'
-    implementation 'org.apache.kafka:kafka-clients:2.4.0'
-    implementation 'redis.clients:jedis:3.6.1'
-    implementation 'org.springframework.boot:spring-boot-starter-web'
-    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     implementation 'org.springframework.kafka:spring-kafka'
-    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    implementation 'org.springframework.boot:spring-boot-starter-web'
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
 }
