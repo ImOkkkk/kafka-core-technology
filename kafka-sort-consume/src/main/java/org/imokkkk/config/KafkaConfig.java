@@ -14,8 +14,11 @@ import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.core.ProducerFactory;
 import org.springframework.kafka.listener.ContainerProperties;
+
+import lombok.Data;
 
 /**
  * @author:
@@ -24,7 +27,8 @@ import org.springframework.kafka.listener.ContainerProperties;
  */
 @EnableKafka
 @Configuration
-@ConfigurationProperties("kafka")
+@ConfigurationProperties(prefix = "kafka")
+@Data
 public class KafkaConfig {
     /**
      * kafka地址
@@ -76,4 +80,8 @@ public class KafkaConfig {
         return new DefaultKafkaProducerFactory<>(producerConfigs());
     }
 
+    @Bean
+    public KafkaTemplate<String, String> kafkaTemplate(){
+        return new KafkaTemplate<>(producerFactory());
+    }
 }
