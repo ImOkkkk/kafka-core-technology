@@ -1,7 +1,13 @@
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
 
+import org.apache.kafka.clients.consumer.CommitFailedException;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
@@ -57,5 +63,39 @@ public class TestDemo {
         } catch (KafkaException e) {
             producer.abortTransaction(); // 事务终止
         }
+    }
+
+    @Test
+    private void ConsumerTest() {
+        Properties properties = new Properties();
+        properties.put("bootstrap.servers", "127.0.0.1:9092");
+        properties.put("group.id", "test");
+        properties.put("enable.auto.commit", true);
+        properties.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+        properties.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+        KafkaConsumer<String, String> consumer = new KafkaConsumer<String, String>(properties);
+        consumer.subscribe(Arrays.asList("foo", "bar"));
+        while (true) {
+            ConsumerRecords<String, String> records = consumer.poll(100);
+            // 处理消息
+            process(records);
+            try {
+                consumer.commitAsync();
+            } catch (CommitFailedException e) {
+                // 处理提交失败异常
+                handle(e);
+            }
+//            for (ConsumerRecord<String, String> record : records) {
+//                System.out.printf("offset = %d, key = %s, value = %s%n", record.offset(), record.key(), record.value());
+//            }
+        }
+    }
+
+    private void handle(CommitFailedException e) {
+        
+    }
+
+    private void process(ConsumerRecords<String, String> records) {
+        
     }
 }
