@@ -1,18 +1,28 @@
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 
-import org.apache.kafka.clients.consumer.CommitFailedException;
+import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
@@ -21,6 +31,8 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -29,6 +41,34 @@ import org.junit.jupiter.api.Test;
  * @since 1.0
  */
 public class TestDemo {
+    private KafkaConsumer<String, String> consumer;
+    private ExecutorService executorService;
+    private int workerNum = 20;
+
+
+    public void MultithreadedConsume() {
+        executorService = new ThreadPoolExecutor(workerNum, workerNum, 0L, TimeUnit.MILLISECONDS,
+            new ArrayBlockingQueue<>(1000), new ThreadPoolExecutor.CallerRunsPolicy());
+        while (true){
+            ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(10000));
+            for (ConsumerRecord<String, String> record : records) {
+                executorService.submit(new Worker(record));
+            }
+        }
+    }
+
+    class Worker implements Runnable{
+        private ConsumerRecord<String, String> record;
+
+        public Worker(ConsumerRecord<String, String> record) {
+            this.record = record;
+        }
+
+        @Override
+        public void run() {
+            // 执行消息处理逻辑
+        }
+    }
 
     @Test
     private void ProducerTest() {
@@ -150,5 +190,70 @@ public class TestDemo {
 
     private void process(ConsumerRecord<String, String> record) {
 
+    }
+    public class KafkaConsumerRunner implements Runnable{
+        private final AtomicBoolean closed = new AtomicBoolean(false);
+        private final KafkaConsumer consumer;
+
+        public KafkaConsumerRunner(KafkaConsumer consumer) {
+            this.consumer = consumer;
+        }
+
+        @Override
+        public void run() {
+            try {
+                consumer.subscribe(Arrays.asList("topic"));
+                while (!closed.get()){
+                    ConsumerRecords records = consumer.poll(Duration.ofMillis(10000));
+                    // 执行消息处理逻辑
+                }
+            }catch (WakeupException e){
+                if(!closed.get()){
+                    throw e;
+                }
+            }finally {
+                consumer.close();
+            }
+        }
+
+        public void shutdown(){
+            closed.set(true);
+            consumer.wakeup();
+        }
+    }
+
+
+    // Consumer 端 API 监控给定消费者组的 Lag 值
+    public static Map<TopicPartition, Long> lagOf(String groupId, String boostrapServers) throws TimeoutException {
+        Properties properties = new Properties();
+        properties.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, boostrapServers);
+        try (AdminClient client = AdminClient.create(properties)) {
+            // 调用AdminClient.listConsumerGroupOffsets()获取给定消费者组的最新消费信息的位移
+            ListConsumerGroupOffsetsResult result = client.listConsumerGroupOffsets(groupId);
+            try {
+                Map<TopicPartition, OffsetAndMetadata> consumerOffsets =
+                    result.partitionsToOffsetAndMetadata().get(10, TimeUnit.SECONDS);
+                properties.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
+                properties.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
+                properties.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+                properties.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+                try (final KafkaConsumer<String, String> consumer = new KafkaConsumer<String, String>(properties)) {
+                    // 获取订阅分区的最新消息位移
+                    Map<TopicPartition, Long> endOffsets = consumer.endOffsets(consumerOffsets.keySet());
+                    // 执行减法操作，获取lag值并封装进一个Map对象
+                    return endOffsets.entrySet().stream().collect(Collectors.toMap(entry -> entry.getKey(),
+                        entry -> entry.getValue() - consumerOffsets.get(entry.getKey()).offset()));
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                // 处理中断异常
+                return Collections.emptyMap();
+            } catch (ExecutionException e) {
+                // 处理ExecutionException
+                return Collections.emptyMap();
+            } catch (TimeoutException e) {
+                throw new TimeoutException("Time out when getting lag for consumer group" + groupId);
+            }
+        }
     }
 }
