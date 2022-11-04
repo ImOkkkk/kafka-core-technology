@@ -14,10 +14,14 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
-
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.CreateTopicsResult;
+import org.apache.kafka.clients.admin.DescribeLogDirsResult;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
+import org.apache.kafka.clients.admin.LogDirDescription;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -254,6 +258,39 @@ public class TestDemo {
             } catch (TimeoutException e) {
                 throw new TimeoutException("Time out when getting lag for consumer group" + groupId);
             }
+        }
+    }
+
+    @Test
+    public void AdminClientTest()
+      throws ExecutionException, InterruptedException, TimeoutException {
+        Properties properties = new Properties();
+        properties.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "kafka-host:port");
+        properties.put("request.timout.ms", 600000);
+        try (AdminClient client = AdminClient.create(properties)){
+            //创建主题
+            NewTopic newTopic = new NewTopic("newTopicName", 10, (short) 3);
+            CreateTopicsResult result1 = client.createTopics(Arrays.asList(newTopic));
+            result1.all().get(10, TimeUnit.SECONDS);
+
+            //查询消费者组位移
+            ListConsumerGroupOffsetsResult result2 = client.listConsumerGroupOffsets("groupId");
+            //按照分区分组的位移数据
+            Map<TopicPartition, OffsetAndMetadata> offsets = result2.partitionsToOffsetAndMetadata()
+              .get(10, TimeUnit.SECONDS);
+
+            //获取 Broker 磁盘占用
+            //1：指定Broker id
+            DescribeLogDirsResult result3 = client.describeLogDirs(
+              Collections.singleton(1));
+            long size = 0l;
+            //使用 AdminClient 的describeLogDirs 方法获取指定 Broker 上所有分区主题的日志路径信息，然后把它们累积在一起，得出总的磁盘占用量
+            for (Map<String, LogDirDescription> logDirDescription : result3.allDescriptions()
+              .get().values()) {
+                logDirDescription.values().stream().map(l -> l.replicaInfos()).flatMap(t ->
+                  t.values().stream().map(r -> r.size())).mapToLong(Long::longValue).sum();
+            }
+            System.out.println(size);
         }
     }
 }
